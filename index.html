@@ -11,43 +11,77 @@
 <body class="bg-slate-50 min-h-screen flex flex-col items-center justify-center p-4">
 
     <div class="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full border border-slate-100 text-center">
-        <div class="w-24 h-24 bg-indigo-600 rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-lg">
-            <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="w-20 h-20 bg-indigo-600 rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-lg">
+            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
             </svg>
         </div>
         
-        <h1 class="text-2xl font-bold text-slate-800 mb-2">Sourdough Suite</h1>
-        <p class="text-slate-500 mb-8">จัดการสูตรและการอบขนมปังอย่างมืออาชีพ</p>
+        <h1 class="text-xl font-bold text-slate-800 mb-2">Sourdough Suite</h1>
+        <p class="text-slate-500 mb-8 text-sm">พร้อมสำหรับการอบขนมปังแล้ว</p>
         
-        <!-- ปุ่มติดตั้งที่จะแสดงเมื่อระบบพร้อม -->
-        <button id="installBtn" class="hidden w-full bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-indigo-700 active:scale-95 transition-all">
-            ติดตั้งแอปบนหน้าจอ
-        </button>
-
-        <div id="pwaStatus" class="mt-4 text-xs text-slate-400">
-            กำลังตรวจสอบระบบ PWA...
+        <div id="app-content" class="space-y-4">
+            <div id="loading-badge" class="p-4 bg-indigo-50 rounded-xl text-indigo-700 text-sm font-medium">
+                กำลังตรวจสอบสถานะแอป...
+            </div>
+            <button onclick="location.reload()" class="text-xs text-slate-400 underline">รีเฟรชหน้าจอ</button>
         </div>
+
+        <button id="installBtn" class="hidden mt-6 w-full bg-indigo-600 text-white font-bold py-3 rounded-xl shadow-md transition-all active:scale-95">
+            ติดตั้งแอป
+        </button>
     </div>
 
     <script>
-        const statusDiv = document.getElementById('pwaStatus');
+        const loadingBadge = document.getElementById('loading-badge');
         const installBtn = document.getElementById('installBtn');
 
-        // 1. ตรวจสอบการลงทะเบียน Service Worker
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js')
-                .then(() => { statusDiv.innerText = "ระบบ PWA พร้อมใช้งาน (Online)"; })
-                .catch(err => { statusDiv.innerText = "SW Error: " + err; });
+        // ฟังก์ชันลงทะเบียน Service Worker อย่างปลอดภัย
+        async function registerSW() {
+            if ('serviceWorker' in navigator) {
+                // ตรวจสอบว่าเป็นโปรโตคอลที่รองรับ (http/https) เพื่อป้องกัน Error ใน preview environment
+                const isSupportedProtocol = window.location.protocol.startsWith('http');
+                
+                if (isSupportedProtocol) {
+                    try {
+                        const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+                        console.log('SW registered successfully:', reg.scope);
+                        loadingBadge.innerText = "ยินดีต้อนรับ! แอปโหลดสำเร็จแล้ว";
+                        loadingBadge.classList.replace('bg-indigo-50', 'bg-green-50');
+                        loadingBadge.classList.replace('text-indigo-700', 'text-green-700');
+
+                        // จัดการการอัปเดต Service Worker
+                        reg.onupdatefound = () => {
+                            const newSW = reg.installing;
+                            newSW.onstatechange = () => {
+                                if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                                    console.log('New content available, refreshing...');
+                                    location.reload();
+                                }
+                            };
+                        };
+                    } catch (err) {
+                        console.error('Service Worker registration failed:', err);
+                        loadingBadge.innerText = "ไม่สามารถลงทะเบียนระบบ Offline ได้";
+                    }
+                } else {
+                    console.warn('Service Worker skipped: Non-standard protocol detected.');
+                    loadingBadge.innerText = "แอปกำลังทำงานในโหมดทดสอบ";
+                }
+            } else {
+                loadingBadge.innerText = "เบราว์เซอร์ของคุณไม่รองรับ PWA";
+            }
         }
 
-        // 2. ดักจับเหตุการณ์ติดตั้ง
+        // เริ่มต้นการทำงานเมื่อหน้าเว็บโหลดเสร็จ
+        window.addEventListener('load', registerSW);
+
+        // ระบบติดตั้ง (Install Prompt)
         let deferredPrompt;
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
-            installBtn.classList.remove('hidden'); // แสดงปุ่มเมื่อเงื่อนไขครบ
-            statusDiv.innerText = "พร้อมสำหรับการติดตั้งแล้ว";
+            installBtn.classList.remove('hidden');
         });
 
         installBtn.addEventListener('click', async () => {
@@ -55,17 +89,19 @@
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
                 if (outcome === 'accepted') {
+                    console.log('User accepted the install prompt');
                     installBtn.classList.add('hidden');
                 }
                 deferredPrompt = null;
             }
         });
 
-        // ตรวจสอบว่าเป็น iOS หรือไม่ เพื่อให้คำแนะนำ
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        if (isIOS && !window.navigator.standalone) {
-            statusDiv.innerText = "บน iOS: กดปุ่ม 'แชร์' และเลือก 'เพิ่มลงในหน้าจอโฮม'";
-        }
+        // ตรวจสอบสถานะการติดตั้งสำเร็จ
+        window.addEventListener('appinstalled', () => {
+            console.log('PWA was installed');
+            installBtn.classList.add('hidden');
+            loadingBadge.innerText = "ติดตั้งสำเร็จ! พร้อมใช้งานแล้ว";
+        });
     </script>
 </body>
 </html>

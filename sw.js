@@ -1,5 +1,4 @@
-// เปลี่ยนชื่อเวอร์ชันทุกครั้งที่มีการแก้ไขโค้ด เพื่อบังคับอัปเดต Browser
-const CACHE_NAME = 'sourdough-v2';
+const CACHE_NAME = 'sourdough-v3'; // เปลี่ยนเวอร์ชันเพื่อล้าง Cache เก่า
 const ASSETS = [
     './',
     './index.html',
@@ -8,43 +7,36 @@ const ASSETS = [
     './icon-512.png'
 ];
 
-// ติดตั้งและเก็บ Cache
+// ติดตั้งและเก็บ Cache ไฟล์พื้นฐาน
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
             return cache.addAll(ASSETS);
         })
     );
-    self.skipWaiting(); // บังคับให้เริ่มทำงานทันที
+    self.skipWaiting();
 });
 
-// จัดการการดึงข้อมูล
+// ดึงข้อมูล: เน้นดึงจาก Network ก่อน ถ้าไม่มีค่อยใช้ Cache (Network First Strategy)
+// วิธีนี้จะช่วยให้คุณอัปเดตโค้ดแล้วเห็นผลทันทีหากมีเน็ต
 self.addEventListener('fetch', (event) => {
     event.respondWith(
-        caches.match(event.request).then((response) => {
-            // คืนค่าจาก Cache ถ้ามี หรือไปโหลดจาก Network
-            return response || fetch(event.request).catch(() => {
-                // ถ้า Offline และหาไฟล์ไม่เจอ ให้ส่งหน้าหลักไป
-                if (event.request.mode === 'navigate') {
-                    return caches.match('./index.html');
-                }
-            });
+        fetch(event.request).catch(() => {
+            return caches.match(event.request);
         })
     );
 });
 
-// ลบ Cache เก่า
+// ล้าง Cache รุ่นเก่าออกไป
 self.addEventListener('activate', (event) => {
     event.waitUntil(
-        caches.keys().then((cacheNames) => {
+        caches.keys().then((keys) => {
             return Promise.all(
-                cacheNames.map((cache) => {
-                    if (cache !== CACHE_NAME) {
-                        return caches.delete(cache);
-                    }
+                keys.map((key) => {
+                    if (key !== CACHE_NAME) return caches.delete(key);
                 })
             );
         })
     );
-    return self.clients.claim(); // ควบคุมหน้าเว็บทันที
+    return self.clients.claim();
 });

@@ -91,10 +91,6 @@
         </div>
 
         <div class="flex items-center space-x-2">
-            <!-- ปุ่มติดตั้ง PWA จะโผล่มาตรงนี้ถ้าเบราว์เซอร์รองรับและยังไม่ได้ติดตั้ง -->
-            <button id="pwa-install-btn" class="hidden bg-sage-600 text-white text-[10px] px-3 py-1.5 rounded-full font-bold shadow-md active:scale-95 transition-transform">
-                <i class="fas fa-download mr-1"></i> ติดตั้ง
-            </button>
             <button @click="toggleLang" class="text-xs font-bold bg-white border border-stone-200 px-2 py-1 rounded shadow-sm hover:bg-stone-50 transition min-w-[40px]">
                 {{ currentLangFlag }} {{ lang.toUpperCase() }}
             </button>
@@ -105,6 +101,12 @@
     </header>
 
     <main class="px-6 relative z-0">
+
+        <!-- ปุ่มติดตั้งแอปแบบเห็นชัดเจน (ดึงกลับมาเป็นแบบเรียบง่าย) -->
+        <button id="pwa-install-btn" class="hidden mb-6 w-full bg-sage-800 text-white font-bold py-4 px-4 rounded-xl shadow-lg flex justify-between items-center active:scale-95 transition-transform">
+            <span class="flex items-center text-sm"><i class="fas fa-mobile-alt text-xl mr-3 text-sage-300"></i> ติดตั้งแอปบนหน้าจอมือถือ</span>
+            <span class="bg-sage-600 text-white text-[10px] px-3 py-1.5 rounded-lg uppercase tracking-wide shadow-sm">ติดตั้ง</span>
+        </button>
 
         <!-- หน้าสูตร (Formula) -->
         <div v-if="activeTab === 'formula'" class="animate-fade-in">

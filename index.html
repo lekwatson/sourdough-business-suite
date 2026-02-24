@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sourdough Planner v15.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Lato:wght@400;700;900&family=Noto+Sans+JP:wght@400;700&family=Noto+Sans+KR:wght@400;700&family=Noto+Sans+SC:wght@400;700&family=Noto+Sans+Thai:wght@400;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sage: { 50: '#f6f7f6', 100: '#e3e8e3', 500: '#84a59d', 600: '#6b8c85', 800: '#3d524e' },
+                        wheat: { 100: '#f7f3e8', 500: '#d4a373' },
+                        stone: { 850: '#292524' },
+                        olive: { 800: '#3a4a3b', 900: '#2a362b' },
+                        gold: { 400: '#fbbf24', 500: '#f59e0b' }
+                    },
+                    fontFamily: {
+                        serif: ['"DM Serif Display"', '"Noto Sans Thai"', '"Noto Sans JP"', '"Noto Sans SC"', '"Noto Sans KR"', 'serif'],
+                        sans: ['"Lato"', '"Noto Sans Thai"', '"Noto Sans JP"', '"Noto Sans SC"', '"Noto Sans KR"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #f7f3e8; }
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { 
+            -webkit-appearance: none; height: 20px; width: 20px; 
+            border-radius: 50%; background: #84a59d; margin-top: -8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2); cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: #e3e8e3; border-radius: 3px; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+        .slide-up-enter-active, .slide-up-leave-active { transition: transform 0.3s ease-out; }
+        .slide-up-enter-from, .slide-up-leave-to { transform: translateY(100%); }
+        .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .timeline-line { position: absolute; left: 7px; top: 24px; bottom: -20px; width: 2px; background: #e3e8e3; z-index: 0; }
+        .timeline-last .timeline-line { display: none; }
+    </style>
+</head>
+<body class="text-stone-700 antialiased font-sans font-medium">
+
+<div id="app" class="max-w-md mx-auto bg-[#faf9f6] min-h-screen shadow-2xl relative pb-28 border-x border-stone-200 overflow-hidden">
+
+    <header class="pt-8 pb-4 px-6 flex justify-between items-center relative z-10">
+        <button @click="showMenu = true" class="text-sage-800 bg-sage-100 hover:bg-sage-200 p-2 rounded-full transition shadow-sm">
+            <i class="fas fa-bars text-lg"></i>
+        </button>
+        
+        <div class="text-center">
+            <div class="inline-block border-b-2 border-sage-500 pb-1 mb-1">
+                <h1 class="text-xl font-serif text-sage-800 tracking-wide">Sourdough Planner</h1>
+            </div>
+            <p class="text-[9px] text-stone-500 font-bold uppercase tracking-widest">
+                v15.0 • Chef Watson
+            </p>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <button @click="toggleLang" class="text-xs font-bold bg-white border border-stone-200 px-2 py-1 rounded shadow-sm hover:bg-stone-50 transition min-w-[40px]">
+                {{ currentLangFlag }} {{ lang.toUpperCase() }}
+            </button>
+            <button @click="showLegal = true" class="text-stone-400 hover:text-stone-600 p-2 rounded-full transition">
+                <i class="fas fa-shield-alt text-sm"></i>
+            </button>
+        </div>
+    </header>
+
+    <main class="px-6 relative z-0">
+
+        <div v-if="activeTab === 'formula'" class="animate-fade-in">
+            <div v-if="warnings.length > 0" class="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg shadow-sm">
+                <h4 class="text-red-800 font-black text-xs uppercase mb-2"><i class="fas fa-exclamation-circle mr-2"></i>{{ t('alert') }}</h4>
+                <ul class="text-xs text-red-700 space-y-1 font-bold">
+                    <li v-for="warn in warnings" class="flex items-start"><span class="mr-1">•</span> {{ warn }}</li>
+                </ul>
+            </div>
+
+            <div class="bg-white p-1 rounded-xl shadow-sm border border-stone-100 mb-4 flex">
+                <button @click="recipe.mode = 'target'" :class="['flex-1 py-2 text-xs font-bold rounded-lg transition', recipe.mode === 'target' ? 'bg-sage-100 text-sage-800 shadow-sm' : 'text-stone-400']">
+                    {{ t('modeTarget') }}
+                </button>
+                <button @click="recipe.mode = 'limit'" :class="['flex-1 py-2 text-xs font-bold rounded-lg transition', recipe.mode === 'limit' ? 'bg-sage-100 text-sage-800 shadow-sm' : 'text-stone-400']">
+                    {{ t('modeLimit') }}
+                </button>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 mb-6 text-center relative overflow-hidden transition-all duration-300" 
+                 :class="recipe.mode === 'limit' ? 'border-sage-300 ring-1 ring-sage-100' : ''">
+                
+                <div class="absolute top-0 left-0 w-full h-1" :class="recipe.mode === 'limit' ? 'bg-sage-400' : 'bg-sage-600'"></div>
+                
+                <div v-if="recipe.mode === 'target'">
+                    <label class="block text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-1">{{ t('targetWeight') }}</label>
+                    <div class="flex justify-center items-baseline">
+                        <input type="number" v-model.number="recipe.targetWeight" class="text-5xl font-serif text-sage-800 text-center w-36 bg-transparent outline-none font-bold">
+                        <span class="text-stone-400 font-serif ml-1 text-lg">g</span>
+                    </div>
+                </div>
+
+                <div v-else>
+                    <label class="block text-[10px] font-bold text-sage-500 uppercase tracking-widest mb-2">{{ t('selectLimit') }}</label>
+                    
+                    <select v-model="recipe.limitType" class="w-full mb-3 bg-sage-50 border border-sage-200 text-stone-700 text-sm font-bold rounded-lg p-2 outline-none text-center">
+                        <option value="total_flour">{{ t('totalFlour') }}</option>
+                        <option value="water">{{ t('water') }}</option>
+                        <option value="starter">{{ t('starter') }}</option>
+                        <option v-for="(f, i) in recipe.flours" :key="i" :value="i">{{ f.name }}</option>
+                    </select>
+
+                    <div class="flex justify-center items-baseline">
+                        <input type="number" v-model.number="recipe.limitWeight" class="text-5xl font-serif text-sage-600 text-center w-36 bg-transparent outline-none font-bold">
+                        <span class="text-stone-400 font-serif ml-1 text-lg">g</span>
+                    </div>
+                    <p class="text-[9px] text-sage-400 mt-2 font-bold uppercase tracking-wide">{{ t('availAmount') }}</p>
+                </div>
+            </div>
+
+            <div class="mb-8">
+                <div class="flex justify-between items-end mb-3">
+                    <h3 class="text-lg font-serif text-stone-800 font-bold">{{ t('flourBlend') }}</h3>
+                    <button @click="addFlour" class="text-[10px] bg-sage-100 text-sage-800 px-3 py-1 rounded-full font-bold">+ {{ t('add') }}</button>
+                </div>
+                <div class="space-y-3">
+                    <div v-for="(flour, index) in recipe.flours" :key="index" class="bg-white p-3 rounded-xl border border-stone-100 shadow-sm flex items-center">
+                        <div class="flex-grow">
+                            <input type="text" v-model="flour.name" class="w-full font-serif font-bold text-stone-700 bg-transparent outline-none" :placeholder="t('flourName')">
+                            <span v-if="index === 0" class="text-[9px] text-sage-500 font-bold uppercase">{{ t('mainBase') }}</span>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="number" v-model.number="flour.percentage" @input="balanceFlours(index)" class="w-12 text-right font-bold text-stone-800 bg-stone-50 rounded px-1 py-1 outline-none" :disabled="index === 0">
+                            <span class="text-xs text-stone-500 ml-1 font-bold">%</span>
+                        </div>
+                        <button v-if="index !== 0" @click="removeFlour(index)" class="ml-3 text-stone-300 hover:text-red-400"><i class="fas fa-times-circle"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <div class="bg-blue-50/50 p-4 rounded-2xl border border-blue-100" :class="{'bg-red-50 ring-2 ring-red-300': recipe.hydration > 85}">
+                    <label class="text-[10px] font-bold text-blue-800 uppercase">{{ t('hydration') }}</label>
+                    <div class="flex items-baseline mt-1 mb-2"><span class="text-3xl font-serif text-blue-900 font-bold">{{ recipe.hydration }}</span><span class="text-sm text-blue-500 font-bold ml-1">%</span></div>
+                    <input type="range" v-model.number="recipe.hydration" min="50" max="100" class="w-full accent-blue-500">
+                </div>
+                <div class="bg-orange-50/50 p-4 rounded-2xl border border-orange-100" :class="{'bg-red-50 ring-2 ring-red-300': recipe.inoculation > 30 || recipe.inoculation < 10}">
+                    <label class="text-[10px] font-bold text-orange-800 uppercase">{{ t('starter') }}</label>
+                    <div class="flex items-baseline mt-1 mb-2"><span class="text-3xl font-serif text-orange-900 font-bold">{{ recipe.inoculation }}</span><span class="text-sm text-orange-500 font-bold ml-1">%</span></div>
+                    <input type="range" v-model.number="recipe.inoculation" min="5" max="50" class="w-full accent-orange-500">
+                </div>
+            </div>
+
+            <div class="mb-8">
+                <div class="flex justify-between items-end mb-3">
+                    <h3 class="text-lg font-serif text-stone-800 font-bold">{{ t('addinsSalt') }}</h3>
+                    <button @click="addAddin" class="text-[10px] bg-stone-200 text-stone-600 px-3 py-1 rounded-full font-bold">+ {{ t('add') }}</button>
+                </div>
+                <div class="bg-white p-3 rounded-xl border border-stone-100 shadow-sm flex justify-between items-center mb-2" :class="{'bg-red-50 border-red-300': recipe.salt < 1.5 || recipe.salt > 3}">
+                    <span class="font-serif font-bold text-stone-600 pl-2">{{ t('salt') }}</span>
+                    <div class="flex items-center"><input type="number" v-model.number="recipe.salt" step="0.1" class="w-14 text-right font-bold text-stone-800 bg-stone-50 rounded px-1 py-1 outline-none"><span class="text-xs text-stone-500 ml-1 font-bold mr-2">%</span></div>
+                </div>
+                <div v-for="(addin, index) in recipe.addins" :key="index" class="bg-white p-3 rounded-xl border border-stone-100 shadow-sm flex items-center mb-2">
+                    <input type="text" v-model="addin.name" class="flex-grow font-serif font-bold text-stone-700 bg-transparent outline-none pl-2" :placeholder="t('ingredient')">
+                    <input type="number" v-model.number="addin.percentage" class="w-14 text-right font-bold text-stone-800 bg-stone-50 rounded px-1 py-1 outline-none"><span class="text-xs text-stone-500 ml-1 font-bold">%</span>
+                    <button @click="removeAddin(index)" class="ml-3 text-stone-300 hover:text-red-400"><i class="fas fa-times-circle"></i></button>
+                </div>
+            </div>
+            
+            <div class="bg-sage-800 text-wheat-100 rounded-2xl p-6 shadow-xl relative overflow-hidden mb-6">
+                <h3 class="text-xs font-bold text-sage-300 uppercase tracking-widest mb-4 border-b border-sage-700 pb-2">{{ t('finalFormula') }}</h3>
+                <div class="space-y-2 relative z-10 font-bold">
+                    <div v-for="f in calculated.flours" class="flex justify-between text-sm"><span class="text-sage-100">{{ f.name }} <span class="text-xs text-sage-400">({{f.percentage}}%)</span></span><span class="font-mono text-white">{{ f.weight }}g</span></div>
+                    <div class="flex justify-between text-sm pt-2"><span class="text-blue-200">{{ t('water') }}</span><span class="font-mono text-blue-100">{{ calculated.water }}g</span></div>
+                    <div class="flex justify-between text-sm"><span class="text-orange-200">{{ t('starter') }}</span><span class="font-mono text-orange-100">{{ calculated.starter }}g</span></div>
+                    <div class="flex justify-between text-sm"><span class="text-stone-300">{{ t('salt') }}</span><span class="font-mono text-stone-200">{{ calculated.salt }}g</span></div>
+                    <div v-for="a in calculated.addins" class="flex justify-between text-sm text-stone-300 italic"><span>+ {{ a.name }}</span><span class="font-mono text-wheat-100">{{ a.weight }}g</span></div>
+                    
+                    <div class="flex justify-between text-sm border-t border-sage-700 pt-2 mt-2">
+                        <span class="text-white uppercase tracking-widest text-[10px] self-center">{{ t('total') }}</span>
+                        <span class="font-mono text-xl text-gold-400">{{ calculated.totalWeight }}g</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-4 bg-stone-100 rounded-xl p-4 border border-stone-200">
+                <h3 class="text-xs font-bold text-stone-500 uppercase tracking-widest mb-3"><i class="fas fa-clipboard-check mr-1"></i> {{ t('qualityCheck') }}</h3>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div><span class="block text-[10px] text-stone-400 uppercase">{{ t('bakedWeight') }}</span><span class="block font-bold text-stone-700 text-lg">~{{ Math.round(calculated.totalWeight * 0.85) }}g</span></div>
+                    <div><span class="block text-[10px] text-stone-400 uppercase">{{ t('internalTemp') }}</span><span class="block font-bold text-stone-700 text-lg">98°C / 208°F</span></div>
+                </div>
+            </div>
+
+            <div class="mb-8 bg-white p-4 rounded-xl border border-stone-200 shadow-sm relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-1 h-full bg-green-500"></div>
+                <h3 class="text-xs font-bold text-stone-500 uppercase tracking-widest mb-3 pl-2">{{ t('nutrition.title') }} <span class="text-[9px] text-stone-300 font-normal">({{ t('nutrition.est') }})</span></h3>
+                <div class="grid grid-cols-3 gap-2 text-center">
+                    <div class="bg-stone-50 rounded p-2"><span class="block text-[9px] text-stone-400 uppercase">{{ t('nutrition.cal') }}</span><span class="block font-bold text-stone-700">{{ nutrients.totalKcal }}</span><span class="text-[8px] text-stone-400">{{ t('nutrition.total') }}</span></div>
+                    <div class="bg-stone-50 rounded p-2"><span class="block text-[9px] text-stone-400 uppercase">{{ t('nutrition.cal100') }}</span><span class="block font-bold text-green-600">{{ nutrients.kcalPer100 }}</span><span class="text-[8px] text-stone-400">kcal/100g</span></div>
+                    <div class="bg-stone-50 rounded p-2"><span class="block text-[9px] text-stone-400 uppercase">{{ t('nutrition.carb') }}</span><span class="block font-bold text-stone-700">{{ nutrients.carbPer100 }}g</span><span class="text-[8px] text-stone-400">/ 100g</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="activeTab === 'schedule'" class="animate-fade-in">
+             <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 mb-8 text-center">
+                <label class="block text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-2">{{ t('targetBakeTime') }}</label>
+                <input type="datetime-local" v-model="scheduler.bakeTime" class="w-full text-center p-3 bg-stone-50 rounded-xl text-stone-800 font-serif font-bold text-lg outline-none focus:ring-1 focus:ring-sage-500">
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                    <label class="text-[10px] font-bold text-blue-800 uppercase"><i class="fas fa-snowflake mr-1"></i> {{ t('retard') }}</label>
+                    <div class="flex items-center mt-1"><input type="number" v-model.number="scheduler.retardHours" class="bg-transparent w-full text-xl font-bold text-blue-700 outline-none"><span class="text-xs text-blue-400">h</span></div>
+                    <input type="range" v-model.number="scheduler.retardHours" min="0" max="48" class="w-full accent-blue-600 h-1 mt-2">
+                </div>
+                <div class="bg-amber-50/50 p-4 rounded-xl border border-amber-100">
+                    <label class="text-[10px] font-bold text-amber-800 uppercase"><i class="fas fa-hourglass-half mr-1"></i> {{ t('bulk') }}</label>
+                    <div class="flex items-center mt-1"><input type="number" v-model.number="scheduler.bulkHours" class="bg-transparent w-full text-xl font-bold text-amber-700 outline-none"><span class="text-xs text-amber-400">h</span></div>
+                    <input type="range" v-model.number="scheduler.bulkHours" min="1" max="12" step="0.5" class="w-full accent-amber-600 h-1 mt-2">
+                </div>
+            </div>
+
+            <div class="relative space-y-4 pb-10">
+                <div v-for="(group, dateKey) in groupedTimeline" :key="dateKey">
+                    <div class="sticky top-0 z-10 bg-[#faf9f6]/95 backdrop-blur py-2 mb-4 border-b border-sage-200">
+                        <span class="text-xs font-black text-sage-800 uppercase tracking-widest bg-sage-100 px-3 py-1 rounded-full"><i class="far fa-calendar-alt mr-1"></i> {{ dateKey }}</span>
+                    </div>
+                    <div class="relative pl-4 ml-2">
+                        <div v-for="(step, index) in group" :key="index" class="relative pl-8 pb-8" :class="{'timeline-last': index === group.length - 1}">
+                            <div class="absolute -left-[5px] top-2 w-4 h-4 rounded-full bg-white border-4 z-10" :class="step.dotColor"></div>
+                            <div v-if="index !== group.length - 1" class="timeline-line"></div>
+                            <div class="flex flex-col">
+                                <span class="text-lg font-black text-stone-800 mb-1 tracking-wide">{{ step.timeDisplay }}</span>
+                                <h4 class="font-serif text-lg font-bold text-stone-700 leading-tight">{{ step.action }}</h4>
+                                <div class="flex items-center justify-between mt-1">
+                                    <p class="text-xs text-stone-500 font-medium">{{ step.desc }}</p>
+                                    <span v-if="step.duration" class="text-[9px] font-bold bg-stone-100 text-stone-400 px-2 py-0.5 rounded-full border border-stone-200">
+                                        <i class="fas fa-history mr-1"></i> {{ step.duration }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="activeTab === 'cost'" class="animate-fade-in">
+            <div class="mb-8">
+                <h3 class="text-lg font-serif font-bold text-stone-800 mb-3">{{ t('ingredients') }}</h3>
+                <div class="bg-white rounded-2xl border border-stone-100 overflow-hidden shadow-sm">
+                    <div v-for="(flour, index) in recipe.flours" :key="'f'+index" class="flex justify-between items-center p-3 border-b border-stone-50 last:border-0">
+                        <div class="text-sm"><div class="font-serif font-bold text-stone-700">{{ flour.name }}</div><div class="text-xs text-stone-400 font-bold">{{ calculated.flours[index].weight }}g</div></div>
+                        <div class="flex items-center"><span class="text-[10px] text-stone-400 mr-2 uppercase font-bold">{{ t('costKg') }}</span><div class="rounded px-2 py-1 flex items-center border" :class="flour.costPerKg <= 0 ? 'border-red-400 bg-red-50' : 'border-stone-100 bg-stone-50'"><span class="text-xs mr-1">{{ currencySymbol }}</span><input type="number" v-model.number="flour.costPerKg" class="w-16 bg-transparent text-right text-sm font-bold outline-none" placeholder="Req."></div></div>
+                    </div>
+                    <div v-for="(addin, index) in recipe.addins" :key="'a'+index" class="flex justify-between items-center p-3 border-b border-stone-50 last:border-0">
+                         <div class="text-sm"><div class="font-serif font-bold text-stone-700">{{ addin.name }}</div><div class="text-xs text-stone-400 font-bold">{{ calculated.addins[index].weight }}g</div></div>
+                        <div class="flex items-center"><span class="text-[10px] text-stone-400 mr-2 uppercase font-bold">{{ t('costKg') }}</span><div class="rounded px-2 py-1 flex items-center border" :class="addin.costPerKg <= 0 ? 'border-red-400 bg-red-50' : 'border-stone-100 bg-stone-50'"><span class="text-xs mr-1">{{ currencySymbol }}</span><input type="number" v-model.number="addin.costPerKg" class="w-16 bg-transparent text-right text-sm font-bold outline-none" placeholder="Req."></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-8">
+                <h3 class="text-lg font-serif font-bold text-stone-800 mb-3">{{ t('energy') }}</h3>
+                <div class="bg-white rounded-2xl border border-stone-100 p-4 shadow-sm space-y-4">
+                    <div class="flex justify-between items-center"><label class="text-xs font-bold text-stone-400 uppercase">{{ t('ovenType') }}</label><select v-model="costs.energyType" class="bg-stone-50 border border-stone-200 text-stone-700 text-sm font-bold rounded-lg px-3 py-1 outline-none"><option value="electric">⚡ Electric</option><option value="gas">🔥 Gas</option><option value="wood">🪵 Wood</option></select></div>
+                    <div v-if="costs.energyType === 'electric'" class="grid grid-cols-2 gap-3"><div><label class="text-[10px] font-bold text-stone-400 uppercase block">Power (Watts)</label><input type="number" v-model.number="costs.electric.watts" class="w-full font-bold text-stone-700 border-b border-dotted"></div><div><label class="text-[10px] font-bold text-stone-400 uppercase block">Rate ({{ currencySymbol }}/kWh)</label><input type="number" v-model.number="costs.electric.rate" class="w-full font-bold text-stone-700 border-b border-dotted"></div></div>
+                    <div v-if="costs.energyType === 'gas'" class="space-y-3"><div class="flex space-x-3"><div class="flex-1"><label class="text-[10px] font-bold text-stone-400 uppercase block">Tank Price ({{ currencySymbol }})</label><input type="number" v-model.number="costs.gas.tankPrice" class="w-full font-bold text-stone-700 border-b border-dotted"></div><div class="flex-1"><label class="text-[10px] font-bold text-stone-400 uppercase block">Tank Weight (kg)</label><input type="number" v-model.number="costs.gas.tankWeight" class="w-full font-bold text-stone-700 border-b border-dotted"></div></div><div><label class="text-[10px] font-bold text-stone-400 uppercase block">Consumption (g/hr)</label><input type="number" v-model.number="costs.gas.consumption" class="w-full font-bold text-stone-700 border-b border-dotted"></div></div>
+                    <div v-if="costs.energyType === 'wood'" class="space-y-3"><div class="flex space-x-3"><div class="flex-1"><label class="text-[10px] font-bold text-stone-400 uppercase block">Cost ({{ currencySymbol }}/Unit)</label><input type="number" v-model.number="costs.wood.costPerUnit" class="w-full font-bold text-stone-700 border-b border-dotted"></div><div class="flex-1"><label class="text-[10px] font-bold text-stone-400 uppercase block">Usage (Unit/hr)</label><input type="number" v-model.number="costs.wood.usagePerHour" class="w-full font-bold text-stone-700 border-b border-dotted"></div></div></div>
+                    <div class="pt-2 border-t border-stone-50"><label class="block text-[10px] font-bold text-stone-400 uppercase">{{ t('bakeTime') }} (Mins)</label><div class="flex items-center justify-between"><input type="number" v-model.number="costs.bakeTimeMinutes" class="w-24 font-bold text-stone-700 text-lg border-b border-dotted outline-none"><div class="text-right"><span class="text-[10px] font-bold text-stone-400 uppercase block">{{ t('energyCost') }}</span><span class="font-mono font-bold text-orange-500">{{ formatMoney(energyCost) }}</span></div></div></div>
+                </div>
+            </div>
+
+            <div class="mb-8">
+                <h3 class="text-lg font-serif font-bold text-stone-800 mb-3">{{ t('labor') }}</h3>
+                <div class="bg-white rounded-2xl border border-stone-100 p-4 shadow-sm flex items-center space-x-3">
+                    <div class="bg-sage-50 p-2 rounded-lg text-sage-600"><i class="fas fa-user-clock"></i></div>
+                    <div class="flex-grow"><label class="block text-[10px] font-bold text-stone-400 uppercase">{{ t('rateHr') }}</label><div class="flex items-baseline"><span class="text-xs font-bold text-stone-400">{{ currencySymbol }}</span><input type="number" v-model.number="costs.laborRate" class="w-full font-bold text-stone-700 outline-none border-b border-dotted"></div></div>
+                    <div class="flex-grow"><label class="block text-[10px] font-bold text-stone-400 uppercase">{{ t('hours') }}</label><div class="flex items-baseline"><input type="number" v-model.number="costs.laborHours" class="w-full font-bold text-stone-700 outline-none border-b border-dotted"><span class="text-xs text-stone-400 font-bold">hrs</span></div></div>
+                    <div class="text-right min-w-[60px]"><label class="block text-[10px] font-bold text-stone-400 uppercase">{{ t('total') }}</label><div class="font-mono font-bold text-sage-600">{{ formatMoney(costs.laborRate * costs.laborHours) }}</div></div>
+                </div>
+            </div>
+
+            <div class="bg-olive-800 text-white rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+                <div class="absolute -right-6 -bottom-6 text-olive-900 opacity-30 text-8xl transform rotate-12"><i class="fas fa-coins"></i></div>
+                <div class="flex justify-between items-end mb-4 border-b border-olive-900/50 pb-4 relative z-10">
+                    <span class="text-sm text-sage-100 font-bold opacity-80">{{ t('totalCost') }}</span>
+                    <span class="text-2xl font-mono font-bold">{{ formatMoney(grandTotalCost) }}</span>
+                </div>
+                
+                <div class="flex justify-between items-center mb-4 bg-olive-900/40 p-2 rounded-lg relative z-10">
+                    <span class="text-xs font-bold text-sage-100 uppercase">{{ t('margin') }} %</span>
+                    <div class="flex items-center"><input type="number" v-model.number="costs.targetMargin" class="w-12 bg-transparent text-right font-bold text-gold-400 outline-none"><span class="text-xs text-gold-400 ml-1">%</span></div>
+                </div>
+                
+                <div class="text-center mb-6 relative z-10">
+                    <p class="text-[10px] text-sage-100 opacity-60 uppercase">{{ t('suggested') }} ({{ costs.targetMargin }}%)</p>
+                    <p class="text-2xl font-black text-gold-400">{{ formatMoney(grandTotalCost / (1 - (costs.targetMargin/100))) }}</p>
+                </div>
+
+                <div class="bg-olive-900 rounded-xl p-4 mb-4 border border-olive-900 shadow-inner relative z-10">
+                    <label class="block text-xs font-bold text-sage-100 opacity-70 uppercase mb-1 text-center">{{ t('sellingPrice') }}</label>
+                    <div class="flex justify-center items-center"><span class="text-xl text-sage-500 mr-1">{{ currencySymbol }}</span><input type="number" v-model.number="costs.sellingPrice" class="bg-transparent text-center text-3xl font-bold text-white w-32 outline-none"></div>
+                </div>
+                <div class="text-center pt-2 relative z-10">
+                    <span class="text-xs text-sage-100 opacity-50 uppercase tracking-widest block mb-1">{{ t('netProfit') }}</span>
+                    <span class="text-4xl font-black tracking-tight drop-shadow-md text-gold-400">{{ formatMoney(profit) }}</span>
+                    <div class="mt-2 text-xs font-bold text-sage-100">Margin: <span :class="profitMargin > 30 ? 'text-green-400' : 'text-orange-300'">{{ profitMargin }}%</span></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <transition name="slide-up"><div v-if="showMenu" class="absolute inset-0 z-50 glass flex flex-col p-6"><div class="flex justify-between items-center mb-8"><h2 class="text-2xl font-serif text-sage-800">{{ t('recipe') }} Book</h2><button @click="showMenu = false" class="text-stone-400 hover:text-stone-600 p-2 bg-white rounded-full shadow-sm"><i class="fas fa-times text-lg"></i></button></div><div class="bg-white p-4 rounded-xl shadow-sm border border-stone-100 mb-6"><h3 class="text-xs font-bold text-stone-400 uppercase mb-2">Save Current</h3><div class="flex space-x-2"><input type="text" v-model="recipeNameInput" class="flex-grow bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm outline-none" placeholder="Recipe Name"><button @click="saveRecipeToLibrary" class="bg-sage-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-sage-700">Save</button></div></div><div class="flex-grow overflow-y-auto mb-6"><div v-for="(r, index) in savedRecipes" :key="index" class="bg-white p-4 rounded-xl border border-stone-100 shadow-sm mb-3 flex justify-between items-center"><div><h4 class="font-bold text-stone-700">{{ r.name }}</h4><p class="text-[10px] text-stone-400">{{ r.date }}</p></div><div class="flex space-x-2"><button @click="loadRecipe(index)" class="bg-sage-50 text-sage-600 px-3 py-1 rounded text-xs font-bold hover:bg-sage-100">Load</button><button @click="deleteRecipe(index)" class="text-stone-300 hover:text-red-400 px-2"><i class="fas fa-trash"></i></button></div></div></div></div></transition>
+    
+    <transition name="fade"><div v-if="showLegal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"><div class="bg-white rounded-2xl p-6 max-w-sm shadow-2xl"><h3 class="text-lg font-serif font-bold text-stone-800 mb-2">Legal Notice</h3><div class="text-xs text-stone-500 space-y-3 mb-4 h-64 overflow-y-auto pr-2 leading-relaxed"><p><strong>1. {{ t('legal.termsHead') }}:</strong> {{ t('legal.termsBody') }}</p><p><strong>2. {{ t('legal.ipHead') }}:</strong> {{ t('legal.ipBody') }}</p><p><strong>3. {{ t('legal.disclaimerHead') }}:</strong> {{ t('legal.disclaimerBody') }}</p></div><button @click="showLegal = false" class="w-full bg-sage-600 text-white py-3 rounded-xl font-bold text-sm shadow-md hover:bg-sage-700">{{ t('understand') }}</button></div></div></transition>
+
+    <nav class="fixed bottom-6 left-6 right-6 bg-white/95 backdrop-blur rounded-full shadow-2xl border border-stone-100 flex justify-around items-center py-3 px-2 z-40"><button @click="activeTab = 'formula'" :class="['flex items-center space-x-2 px-4 py-2 rounded-full transition-all', activeTab === 'formula' ? 'bg-sage-100 text-sage-800' : 'text-stone-400']"><i class="fas fa-calculator"></i><span v-if="activeTab === 'formula'" class="text-xs font-black">{{ t('recipe') }}</span></button><button @click="activeTab = 'schedule'" :class="['flex items-center space-x-2 px-4 py-2 rounded-full transition-all', activeTab === 'schedule' ? 'bg-sage-100 text-sage-800' : 'text-stone-400']"><i class="fas fa-clock"></i><span v-if="activeTab === 'schedule'" class="text-xs font-black">{{ t('plan') }}</span></button><button @click="activeTab = 'cost'" :class="['flex items-center space-x-2 px-4 py-2 rounded-full transition-all', activeTab === 'cost' ? 'bg-sage-100 text-sage-800' : 'text-stone-400']"><i class="fas fa-coins"></i><span v-if="activeTab === 'cost'" class="text-xs font-black">{{ t('profit') }}</span></button></nav>
+
+</div>
+
+<script>
+    const { createApp } = Vue
+
+    const messages = {
+        en: {
+            recipe: 'Recipe', plan: 'Plan', profit: 'Profit', alert: 'Recipe Alert', targetWeight: 'Target Dough Weight', baseFlourWeight: 'Base Flour Weight', flourBlend: 'Flour Blend', add: 'Add', flourName: 'Flour Name', mainBase: 'Main Base', hydration: 'Hydration', starter: 'Starter', addinsSalt: 'Add-ins & Salt', salt: 'Salt', ingredient: 'Ingredient', finalFormula: 'Final Formula', water: 'Water', targetBakeTime: 'Target Bake Time', retard: 'Cold Retard', bulk: 'Bulk Ferment', ovenType: 'Oven Type', bakeTime: 'Bake Time', energyCost: 'Energy Cost', labor: 'Labor', rateHr: 'Rate/Hr', hours: 'Hours', total: 'Total', ingredients: 'Ingredients', energy: 'Energy', costKg: 'Cost/kg', totalCost: 'Total Cost', margin: 'Desired Margin', suggested: 'Suggested Price', sellingPrice: 'Actual Selling Price', netProfit: 'Net Profit', understand: 'I Understand', qualityCheck: 'Quality Check', bakedWeight: 'Est. Baked Weight', internalTemp: 'Internal Temp', modeTarget: 'Target Weight', modeBase: 'Limit / Base', selectLimit: 'Select Limiting Ingredient', totalFlour: 'Total Flour', availAmount: 'Available Amount', calculatingTotal: 'Calculating...',
+            nutrition: { title: 'Nutrition Facts', est: 'Estimated/Raw', cal: 'Calories', cal100: 'Per 100g', carb: 'Carbs', total: 'Per Loaf' },
+            today: 'Today', tomorrow: 'Tomorrow',
+            defaults: { bread: 'Bread Flour', whole: 'Whole Wheat', rye: 'Rye Flour' },
+            steps: { bake: 'BAKE!', score: 'Score & Bake', preheat: 'Preheat Oven', ovenSet: '450°F / 230°C', retard: 'Cold Retard', fridge: 'Fridge Rest', shape: 'Shape Dough', finalShape: 'Final Shape', bulk: 'Bulk Ferment', folds: 'Coil Folds', mix: 'Mix Dough', mixDesc: 'Add Salt/Starter', feed: 'Feed Starter', feedDesc: '1:2:2 Ratio', addins: 'Add Inclusions', lamination: 'Lamination' },
+            warnings: { saltLow: 'Salt low (<1.5%)', saltHigh: 'Salt high (>3.0%)', startHigh: 'High Starter (>30%)', startLow: 'Low Starter (<10%)', hydraHigh: 'High Hydration (>85%)', addinHigh: 'High Add-ins (>30%)' },
+            legal: { 
+                termsHead: 'Terms of Use', 
+                termsBody: 'This application ("Sourdough Planner") is provided "as is" for personal and commercial planning purposes. By using this tool, you agree that the creator assumes no liability for business decisions, financial losses, or production errors resulting from its use.',
+                ipHead: 'Intellectual Property',
+                ipBody: 'All code, design logic, and user interface elements are the intellectual property of Chef Watson (© 2026). Unauthorized reproduction, redistribution, reverse engineering, or resale of this software product is strictly prohibited.',
+                disclaimerHead: 'Disclaimer',
+                disclaimerBody: 'This product is a standalone web application and is not affiliated with, endorsed by, or connected to Microsoft Excel, Google Sheets, or any other spreadsheet software trademarks. Food safety alerts are based on general guidelines; always follow your local health department regulations.'
+            }
+        },
+        th: {
+            recipe: 'สูตร', plan: 'แผนงาน', profit: 'กำไร', alert: 'คำเตือนสูตร', targetWeight: 'น้ำหนักโดเป้าหมาย', baseFlourWeight: 'น้ำหนักแป้งตั้งต้น', flourBlend: 'ส่วนผสมแป้ง', add: 'เพิ่ม', flourName: 'ชื่อแป้ง', mainBase: 'แป้งหลัก', hydration: 'ความชื้น', starter: 'หัวเชื้อ', addinsSalt: 'ของเติม & เกลือ', salt: 'เกลือ', ingredient: 'วัตถุดิบ', finalFormula: 'สูตรสุทธิ', water: 'น้ำ', targetBakeTime: 'เวลาอบเป้าหมาย', retard: 'แช่เย็น', bulk: 'หมักแป้ง', ovenType: 'ชนิดเตาอบ', bakeTime: 'เวลาอบ', energyCost: 'ค่าพลังงาน', labor: 'ค่าแรง', rateHr: 'ค่าแรง/ชม.', hours: 'ชม.', total: 'รวม', ingredients: 'ค่าวัตถุดิบ', energy: 'พลังงาน', costKg: 'ต้นทุน/กก.', totalCost: 'ต้นทุนรวม', margin: 'กำไรที่ต้องการ', suggested: 'ราคาแนะนำ', sellingPrice: 'ราคาขายจริง', netProfit: 'กำไรสุทธิ', understand: 'รับทราบ', qualityCheck: 'ตรวจสอบคุณภาพ', bakedWeight: 'นน. หลังอบ', internalTemp: 'อุณหภูมิภายใน', modeTarget: 'โหมดเป้าหมาย', modeBase: 'โหมดลิมิต', selectLimit: 'เลือกวัตถุดิบที่มีจำกัด', totalFlour: 'แป้งรวม', availAmount: 'ปริมาณที่มี', calculatingTotal: 'กำลังคำนวณ...',
+            nutrition: { title: 'ข้อมูลโภชนาการ', est: 'ประมาณการ', cal: 'แคลอรี่', cal100: 'ต่อ 100ก.', carb: 'คาร์บ', total: 'ต่อก้อน' },
+            today: 'วันนี้', tomorrow: 'พรุ่งนี้',
+            defaults: { bread: 'แป้งขนมปัง', whole: 'โฮลวีท', rye: 'แป้งไรย์' },
+            steps: { bake: 'อบขนมปัง!', score: 'กรีดหน้า & เข้าเตา', preheat: 'วอร์มเตาอบ', ovenSet: '230°C / 450°F', retard: 'แช่เย็น (Cold Retard)', fridge: 'พักในตู้เย็น', shape: 'ขึ้นรูป', finalShape: 'ขึ้นรูปจริง', bulk: 'หมักแป้ง (Bulk)', folds: 'พับแป้ง', mix: 'ผสมแป้ง', mixDesc: 'ใส่เกลือ/หัวเชื้อ', feed: 'เลี้ยงยีสต์', feedDesc: 'อัตราส่วน 1:2:2', addins: 'ใส่ไส้', lamination: 'แผ่แป้ง (Lamination)' },
+            warnings: { saltLow: 'เกลือน้อยไป (<1.5%)', saltHigh: 'เกลือมากไป (>3.0%)', startHigh: 'หัวเชื้อมากไป (>30%)', startLow: 'หัวเชื้อน้อยไป (<10%)', hydraHigh: 'น้ำเยอะมาก (>85%)', addinHigh: 'ใส่ไส้เยอะไป (>30%)' },
+            legal: { termsHead: 'ข้อตกลงการใช้งาน', termsBody: 'แอปพลิเคชันนี้ ("Sourdough Planner") ให้บริการตามสภาพที่เป็นอยู่ เพื่อใช้ในการวางแผนส่วนบุคคลและเชิงพาณิชย์ ผู้ใช้งานยอมรับความเสี่ยงในการตัดสินใจทางธุรกิจแต่เพียงผู้เดียว ผู้สร้างไม่มีส่วนรับผิดชอบต่อความผิดพลาดหรือความเสียหายใดๆ', ipHead: 'ทรัพย์สินทางปัญญา', ipBody: 'โค้ด, การออกแบบ, และตรรกะการคำนวณทั้งหมดเป็นลิขสิทธิ์ของ Chef Watson (© 2026) ห้ามทำซ้ำ, ดัดแปลง, วิศวกรรมย้อนกลับ, หรือนำไปจำหน่ายต่อโดยไม่ได้รับอนุญาต', disclaimerHead: 'ข้อจำกัดความรับผิดชอบ', disclaimerBody: 'ผลิตภัณฑ์นี้เป็นเว็บแอปพลิเคชันอิสระ ไม่มีความเกี่ยวข้องกับ Microsoft Excel หรือ Google Sheets คำเตือนความปลอดภัยทางอาหารเป็นเพียงการประมาณการ โปรดปฏิบัติตามกฎระเบียบสาธารณสุขในท้องถิ่น' }
+        },
+        // FULL LEGAL TEXT FOR ALL LANGUAGES (Condensed in code but logic is full)
+        de: { recipe: 'Rezept', plan: 'Plan', profit: 'Profit', alert: 'Rezept Warnung', targetWeight: 'Teiggewicht Ziel', baseFlourWeight: 'Mehlbasis', flourBlend: 'Mehlmischung', add: 'Neu', flourName: 'Mehl Name', mainBase: 'Basis', hydration: 'Hydratation', starter: 'Anstellgut', addinsSalt: 'Zutaten & Salz', salt: 'Salz', ingredient: 'Zutat', finalFormula: 'Endgültiges Rezept', water: 'Wasser', targetBakeTime: 'Backzeit Ziel', retard: 'Kalte Gare', bulk: 'Stockgare', ovenType: 'Ofentyp', bakeTime: 'Backzeit', energyCost: 'Energiekosten', labor: 'Arbeit', rateHr: 'Satz/Std', hours: 'Std', total: 'Gesamt', ingredients: 'Zutaten', energy: 'Energie', costKg: 'Kosten/kg', totalCost: 'Gesamtkosten', margin: 'Marge', suggested: 'Vorschlag', sellingPrice: 'Verkaufspreis', netProfit: 'Reingewinn', understand: 'Verstanden', qualityCheck: 'Qualitätsprüfung', bakedWeight: 'Gewicht gebacken', internalTemp: 'Kerntemperatur', modeTarget: 'Zielgewicht', modeBase: 'Limit-Modus', selectLimit: 'Zutat auswählen', totalFlour: 'Gesamtmehl', availAmount: 'Verfügbare Menge', calculatingTotal: 'Berechne...', nutrition: { title: 'Nährwerte', est: 'Geschätzt', cal: 'Kalorien', cal100: 'Pro 100g', carb: 'Kohlenh.', total: 'Gesamt' }, today: 'Heute', tomorrow: 'Morgen', defaults: { bread: 'Weizenmehl', whole: 'Vollkorn', rye: 'Roggenmehl' }, steps: { bake: 'BACKEN!', score: 'Schneiden', preheat: 'Vorheizen', ovenSet: '230°C', retard: 'Kalte Gare', fridge: 'Kühlschrank', shape: 'Formen', finalShape: 'Endform', bulk: 'Stockgare', folds: 'Falten', mix: 'Mischen', mixDesc: 'Salz/ASG', feed: 'ASG Füttern', feedDesc: '1:2:2', addins: 'Zutaten', lamination: 'Laminieren' }, warnings: { saltLow: 'Salz niedrig', saltHigh: 'Salz hoch', startHigh: 'Viel ASG', startLow: 'Wenig ASG', hydraHigh: 'Hohe Hydratation', addinHigh: 'Viel Zusatz' }, legal: { termsHead: 'Nutzungsbedingungen', termsBody: 'Diese Anwendung wird "wie besehen" bereitgestellt. Der Nutzer übernimmt die volle Verantwortung für Geschäftsentscheidungen.', ipHead: 'Urheberrecht', ipBody: '© 2026 Chef Watson. Vervielfältigung untersagt.', disclaimerHead: 'Haftung', disclaimerBody: 'Keine Microsoft Verbindung. Schätzwerte.' } },
+        fr: { recipe: 'Recette', plan: 'Plan', profit: 'Profit', alert: 'Alerte', targetWeight: 'Poids Cible', baseFlourWeight: 'Base Farine', flourBlend: 'Mélange Farine', add: 'Ajouter', flourName: 'Nom Farine', mainBase: 'Base', hydration: 'Hydratation', starter: 'Levain', addinsSalt: 'Ajouts & Sel', salt: 'Sel', ingredient: 'Ingrédient', finalFormula: 'Formule Finale', water: 'Eau', targetBakeTime: 'Heure Cuisson', retard: 'Pointage Froid', bulk: 'Pointage', ovenType: 'Type Four', bakeTime: 'Temps Cuisson', energyCost: 'Coût Énergie', labor: 'Travail', rateHr: 'Taux/H', hours: 'Heures', total: 'Total', ingredients: 'Ingrédients', energy: 'Énergie', costKg: 'Coût/kg', totalCost: 'Coût Total', margin: 'Marge', suggested: 'Prix Suggéré', sellingPrice: 'Prix Vente', netProfit: 'Profit Net', understand: 'Je Comprends', qualityCheck: 'Contrôle Qualité', bakedWeight: 'Poids Cuit', internalTemp: 'Temp. Interne', modeTarget: 'Poids Cible', modeBase: 'Mode Limite', selectLimit: 'Ingrédient Limite', totalFlour: 'Farine Totale', availAmount: 'Quantité Dispo', calculatingTotal: 'Calcul...', nutrition: { title: 'Nutrition', est: 'Estimé', cal: 'Calories', cal100: 'Par 100g', carb: 'Glucides', total: 'Par Pain' }, today: 'Aujourd\'hui', tomorrow: 'Demain', defaults: { bread: 'Farine Blanche', whole: 'Complète', rye: 'Seigle' }, steps: { bake: 'CUIRE!', score: 'Grigner', preheat: 'Préchauffer', ovenSet: '230°C', retard: 'Pointage Froid', fridge: 'Frigo', shape: 'Façonnage', finalShape: 'Forme Finale', bulk: 'Pointage', folds: 'Rabats', mix: 'Pétrissage', mixDesc: 'Sel/Levain', feed: 'Rafraîchir', feedDesc: 'Ratio 1:2:2', addins: 'Inclusions', lamination: 'Laminage' }, warnings: { saltLow: 'Peu de sel', saltHigh: 'Trop de sel', startHigh: 'Trop de levain', startLow: 'Peu de levain', hydraHigh: 'Hydratation Élevée', addinHigh: 'Trop d\'ajouts' }, legal: { termsHead: 'Conditions', termsBody: 'Fourni "tel quel". Risques utilisateur.', ipHead: 'Propriété', ipBody: '© 2026 Chef Watson. Reproduction interdite.', disclaimerHead: 'Avis', disclaimerBody: 'Non affilié à Microsoft.' } },
+        zh: { recipe: '配方', plan: '计划', profit: '利润', alert: '警告', targetWeight: '目标重', baseFlourWeight: '基础面粉', flourBlend: '面粉', add: '添加', flourName: '名称', mainBase: '基础', hydration: '含水量', starter: '酵母', addinsSalt: '配料&盐', salt: '盐', ingredient: '配料', finalFormula: '最终', water: '水', targetBakeTime: '烘焙时间', retard: '冷发酵', bulk: '基础发酵', ovenType: '烤箱', bakeTime: '时长', energyCost: '能源', labor: '人工', rateHr: '时薪', hours: '工时', total: '总计', ingredients: '材料', energy: '能源', costKg: '单价', totalCost: '总成本', margin: '利润率', suggested: '建议价', sellingPrice: '售价', netProfit: '净利', understand: '明白', qualityCheck: '质量', bakedWeight: '烤后重', internalTemp: '温度', modeTarget: '目标重', modeBase: '限制模式', selectLimit: '限制材料', totalFlour: '总面粉', availAmount: '可用量', calculatingTotal: '计算中...', nutrition: { title: '营养', est: '预估', cal: '卡路里', cal100: '每100g', carb: '碳水', total: '整份' }, today: '今天', tomorrow: '明天', defaults: { bread: '高筋粉', whole: '全麦', rye: '黑麦' }, steps: { bake: '烘焙', score: '割包', preheat: '预热', ovenSet: '230°C', retard: '冷藏', fridge: '冰箱', shape: '整形', finalShape: '最终', bulk: '发酵', folds: '折叠', mix: '混合', mixDesc: '加盐', feed: '喂养', feedDesc: '1:2:2', addins: '加料', lamination: '层叠' }, warnings: { saltLow: '盐少', saltHigh: '盐多', startHigh: '酵母多', startLow: '酵母少', hydraHigh: '水多', addinHigh: '料多' }, legal: { termsHead: '条款', termsBody: '按原样提供。', ipHead: '版权', ipBody: '© 2026 Chef Watson。', disclaimerHead: '声明', disclaimerBody: '与微软无关。' } },
+        ja: { recipe: 'レシピ', plan: '計画', profit: '利益', alert: '警告', targetWeight: '目標重量', baseFlourWeight: '基本粉量', flourBlend: '粉配合', add: '追加', flourName: '粉名', mainBase: '基本', hydration: '加水', starter: '種', addinsSalt: '具&塩', salt: '塩', ingredient: '具材', finalFormula: '配合', water: '水', targetBakeTime: '焼成時刻', retard: '冷蔵', bulk: '一次', ovenType: 'オーブン', bakeTime: '時間', energyCost: '光熱費', labor: '人件費', rateHr: '時給', hours: '時間', total: '合計', ingredients: '材料', energy: '光熱費', costKg: '単価', totalCost: '総コスト', margin: '利益率', suggested: '推奨', sellingPrice: '売価', netProfit: '純利益', understand: '了解', qualityCheck: '品質', bakedWeight: '焼成後', internalTemp: '温度', modeTarget: '目標重量', modeBase: '制限モード', selectLimit: '制限材料', totalFlour: '総粉量', availAmount: '在庫量', calculatingTotal: '計算中...', nutrition: { title: '栄養', est: '推定', cal: 'カロリー', cal100: '100g', carb: '炭水化物', total: '1個' }, today: '今日', tomorrow: '明日', defaults: { bread: '強力粉', whole: '全粒粉', rye: 'ライ麦' }, steps: { bake: '焼成', score: 'クープ', preheat: '予熱', ovenSet: '230°C', retard: '冷蔵', fridge: '冷蔵庫', shape: '成形', finalShape: '最終', bulk: '発酵', folds: 'パンチ', mix: '混合', mixDesc: '塩・種', feed: '種継ぎ', feedDesc: '1:2:2', addins: '具入れ', lamination: '畳み' }, warnings: { saltLow: '塩少', saltHigh: '塩多', startHigh: '種多', startLow: '種少', hydraHigh: '高加水', addinHigh: '具多' }, legal: { termsHead: '規約', termsBody: '自己責任。', ipHead: '著作権', ipBody: '© 2026 Chef Watson。', disclaimerHead: '免責', disclaimerBody: 'Microsoft無関係。' } },
+        ko: { recipe: '레시피', plan: '계획', profit: '이익', alert: '경고', targetWeight: '목표무게', baseFlourWeight: '밀가루양', flourBlend: '밀가루', add: '추가', flourName: '이름', mainBase: '기본', hydration: '수분', starter: '르방', addinsSalt: '재료&소금', salt: '소금', ingredient: '재료', finalFormula: '최종', water: '물', targetBakeTime: '굽는시간', retard: '저온', bulk: '1차', ovenType: '오븐', bakeTime: '시간', energyCost: '에너지', labor: '인건비', rateHr: '시급', hours: '시간', total: '합계', ingredients: '재료비', energy: '에너지', costKg: '단가', totalCost: '총비용', margin: '마진', suggested: '권장가', sellingPrice: '판매가', netProfit: '순이익', understand: '확인', qualityCheck: '품질', bakedWeight: '굽기후', internalTemp: '온도', modeTarget: '목표 무게', modeBase: '제한 모드', selectLimit: '제한 재료 선택', totalFlour: '총 밀가루', availAmount: '보유량', calculatingTotal: '계산 중...', nutrition: { title: '영양', est: '추정', cal: '칼로리', cal100: '100g당', carb: '탄수화물', total: '개당' }, today: '오늘', tomorrow: '내일', defaults: { bread: '강력분', whole: '통밀', rye: '호밀' }, steps: { bake: '굽기', score: '쿠프', preheat: '예열', ovenSet: '230°C', retard: '저온', fridge: '냉장고', shape: '성형', finalShape: '최종', bulk: '발효', folds: '폴딩', mix: '반죽', mixDesc: '소금', feed: '밥주기', feedDesc: '1:2:2', addins: '충전물', lamination: '라미' }, warnings: { saltLow: '소금부족', saltHigh: '소금과다', startHigh: '르방과다', startLow: '르방부족', hydraHigh: '고가수', addinHigh: '충전물과다' }, legal: { termsHead: '약관', termsBody: '책임 없음.', ipHead: '저작권', ipBody: '© 2026 Chef Watson.', disclaimerHead: '면책', disclaimerBody: 'Microsoft 무관.' } },
+        es: { recipe: 'Receta', plan: 'Plan', profit: 'Beneficio', alert: 'Alerta Receta', targetWeight: 'Peso Masa', baseFlourWeight: 'Peso Harina', flourBlend: 'Harinas', add: 'Añadir', flourName: 'Nombre', mainBase: 'Base', hydration: 'Hidratación', starter: 'Masa Madre', addinsSalt: 'Extras & Sal', salt: 'Sal', ingredient: 'Ingrediente', finalFormula: 'Fórmula Final', water: 'Agua', targetBakeTime: 'Hora Horneado', retard: 'Retardo Frío', bulk: 'Fermentación', ovenType: 'Horno', bakeTime: 'Tiempo Horneado', energyCost: 'Costo Energía', labor: 'Trabajo', rateHr: 'Tasa/Hr', hours: 'Horas', total: 'Total', ingredients: 'Ingredientes', energy: 'Energía', costKg: 'Costo/kg', totalCost: 'Costo Total', margin: 'Margen', suggested: 'Sugerido', sellingPrice: 'Precio Venta', netProfit: 'Ganancia', understand: 'Entendido', qualityCheck: 'Calidad', bakedWeight: 'Peso Horneado', internalTemp: 'Temp. Interna', modeTarget: 'Peso Objetivo', modeBase: 'Modo Límite', selectLimit: 'Ingrediente Límite', totalFlour: 'Harina Total', availAmount: 'Cantidad Disp.', calculatingTotal: 'Calculando...', nutrition: { title: 'Nutrición', est: 'Estimado', cal: 'Calorías', cal100: '100g', carb: 'Carbo', total: 'Pieza' }, today: 'Hoy', tomorrow: 'Mañana', defaults: { bread: 'Harina Pan', whole: 'Integral', rye: 'Centeno' }, steps: { bake: 'HORNEAR!', score: 'Cortar', preheat: 'Precalentar', ovenSet: '230°C', retard: 'Retardo Frío', fridge: 'Nevera', shape: 'Formado', finalShape: 'Forma Final', bulk: 'Fermentación', folds: 'Pliegues', mix: 'Mezcla', mixDesc: 'Sal/MM', feed: 'Refrescar', feedDesc: '1:2:2', addins: 'Inclusiones', lamination: 'Laminado' }, warnings: { saltLow: 'Poca sal', saltHigh: 'Mucha sal', startHigh: 'Mucha MM', startLow: 'Poca MM', hydraHigh: 'Alta Hidratación', addinHigh: 'Muchos extras' }, legal: { termsHead: 'Términos', termsBody: 'Uso bajo su propio riesgo.', ipHead: 'Propiedad', ipBody: '© 2026 Chef Watson.', disclaimerHead: 'Aviso', disclaimerBody: 'No afiliado a Microsoft.' } },
+        it: { recipe: 'Ricetta', plan: 'Piano', profit: 'Profitto', alert: 'Avviso', targetWeight: 'Peso Impasto', baseFlourWeight: 'Peso Farina', flourBlend: 'Farine', add: 'Aggiungi', flourName: 'Nome', mainBase: 'Base', hydration: 'Idratazione', starter: 'Lievito', addinsSalt: 'Extra & Sale', salt: 'Sale', ingredient: 'Ingrediente', finalFormula: 'Formula Finale', water: 'Acqua', targetBakeTime: 'Ora Cottura', retard: 'Maturazione', bulk: 'Puntata', ovenType: 'Forno', bakeTime: 'Tempo Cottura', energyCost: 'Costo Energia', labor: 'Lavoro', rateHr: 'Tasso/Hr', hours: 'Ore', total: 'Totale', ingredients: 'Ingredienti', energy: 'Energia', costKg: 'Costo/kg', totalCost: 'Costo Totale', margin: 'Margine', suggested: 'Suggerito', sellingPrice: 'Prezzo Vendita', netProfit: 'Utile', understand: 'Capisco', qualityCheck: 'Qualità', bakedWeight: 'Peso Cotto', internalTemp: 'Temp. Interna', modeTarget: 'Peso Obiettivo', modeBase: 'Modo Limite', selectLimit: 'Ingrediente Limite', totalFlour: 'Farina Totale', availAmount: 'Quantità Disp.', calculatingTotal: 'Calcolo...', nutrition: { title: 'Nutrizione', est: 'Stima', cal: 'Calorie', cal100: '100g', carb: 'Carb', total: 'Pezzo' }, today: 'Oggi', tomorrow: 'Domani', defaults: { bread: 'Farina 0', whole: 'Integrale', rye: 'Segale' }, steps: { bake: 'CUOCERE!', score: 'Taglio', preheat: 'Preriscaldare', ovenSet: '230°C', retard: 'Frigo', fridge: 'Maturazione', shape: 'Formatura', finalShape: 'Finale', bulk: 'Puntata', folds: 'Pieghe', mix: 'Impasto', mixDesc: 'Sale/LM', feed: 'Rinfresco', feedDesc: '1:2:2', addins: 'Inclusioni', lamination: 'Laminazione' }, warnings: { saltLow: 'Poco sale', saltHigh: 'Troppo sale', startHigh: 'Troppo LM', startLow: 'Poco LM', hydraHigh: 'Idratazione Alta', addinHigh: 'Troppi extra' }, legal: { termsHead: 'Termini', termsBody: 'Uso a proprio rischio.', ipHead: 'Proprietà', ipBody: '© 2026 Chef Watson.', disclaimerHead: 'Avviso', disclaimerBody: 'Non affiliato Microsoft.' } },
+        nl: { recipe: 'Recept', plan: 'Plan', profit: 'Winst', alert: 'Alert', targetWeight: 'Doelgewicht', baseFlourWeight: 'Meelgewicht', flourBlend: 'Meelmix', add: 'Toevoegen', flourName: 'Naam', mainBase: 'Basis', hydration: 'Hydratatie', starter: 'Desem', addinsSalt: 'Extra & Zout', salt: 'Zout', ingredient: 'Ingrediënt', finalFormula: 'Formule', water: 'Water', targetBakeTime: 'Baktijd', retard: 'Kouderijs', bulk: 'Bulkrijs', ovenType: 'Oventype', bakeTime: 'Baktijd', energyCost: 'Energie', labor: 'Arbeid', rateHr: 'Tarief', hours: 'Uren', total: 'Totaal', ingredients: 'Ingrediënten', energy: 'Energie', costKg: 'Kosten/kg', totalCost: 'Kosten', margin: 'Marge', suggested: 'Advies', sellingPrice: 'Verkoopprijs', netProfit: 'Winst', understand: 'Begrepen', qualityCheck: 'Kwaliteit', bakedWeight: 'Gewicht', internalTemp: 'Kerntemp', modeTarget: 'Doel', modeBase: 'Limiet', selectLimit: 'Limiet Ingrediënt', totalFlour: 'Totaal Meel', availAmount: 'Beschikbaar', calculatingTotal: 'Berekenen...', nutrition: { title: 'Voeding', est: 'Schatting', cal: 'Calorieën', cal100: '100g', carb: 'Koolh.', total: 'Per stuk' }, today: 'Vandaag', tomorrow: 'Morgen', defaults: { bread: 'Tarwe', whole: 'Volkoren', rye: 'Rogge' }, steps: { bake: 'BAKKEN', score: 'Insnijden', preheat: 'Voorverwarmen', ovenSet: '230°C', retard: 'Koelkast', fridge: 'Kouderijs', shape: 'Vormen', finalShape: 'Definitief', bulk: 'Bulk', folds: 'Vouwen', mix: 'Mengen', mixDesc: 'Zout/Desem', feed: 'Voeden', feedDesc: '1:2:2', addins: 'Extra', lamination: 'Lamineren' }, warnings: { saltLow: 'Zout laag', saltHigh: 'Zout hoog', startHigh: 'Veel desem', startLow: 'Weinig desem', hydraHigh: 'Hoog water', addinHigh: 'Veel extra' }, legal: { termsHead: 'Voorwaarden', termsBody: 'Eigen risico.', ipHead: 'Copyright', ipBody: '© 2026 Chef Watson.', disclaimerHead: 'Disclaimer', disclaimerBody: 'Niet Microsoft.' } }
+    };
+
+    createApp({
+        data() {
+            return {
+                lang: 'en',
+                showMenu: false, showLegal: false, activeTab: 'formula', recipeNameInput: '', savedRecipes: [],
+                recipe: {
+                    mode: 'target', 
+                    targetWeight: 900, 
+                    limitWeight: 500, // For Limit Mode input
+                    limitType: 'total_flour', // Default limit type
+                    hydration: 75, inoculation: 20, salt: 2,
+                    flours: [{ name: 'Bread Flour', percentage: 90, costPerKg: 0 }, { name: 'Whole Wheat', percentage: 10, costPerKg: 0 }],
+                    addins: []
+                },
+                scheduler: { bakeTime: '', retardHours: 12, bulkHours: 4 },
+                costs: {
+                    energyType: 'electric', electric: { watts: 2000, rate: 0.15 }, gas: { tankPrice: 15, tankWeight: 15, consumption: 200 }, wood: { costPerUnit: 5, usagePerHour: 1 },
+                    bakeTimeMinutes: 45, laborRate: 15.00, laborHours: 0.5, sellingPrice: 15.00, targetMargin: 50
+                }
+            }
+        },
+        computed: {
+            currentLangFlag() {
+                const flags = { en: '🇺🇸', de: '🇩🇪', fr: '🇫🇷', nl: '🇳🇱', es: '🇪🇸', it: '🇮🇹', zh: '🇨🇳', ja: '🇯🇵', ko: '🇰🇷', th: '🇹🇭' };
+                return flags[this.lang];
+            },
+            currencySymbol() {
+                const map = { en: '$', de: '€', fr: '€', nl: '€', es: '€', it: '€', zh: '¥', ja: '¥', ko: '₩', th: '฿' };
+                return map[this.lang] || '$';
+            },
+            currencyCode() {
+                const map = { en: 'USD', de: 'EUR', fr: 'EUR', nl: 'EUR', es: 'EUR', it: 'EUR', zh: 'CNY', ja: 'JPY', ko: 'KRW', th: 'THB' };
+                return map[this.lang] || 'USD';
+            },
+            warnings() {
+                const w = [];
+                const txt = messages[this.lang].warnings;
+                if (this.recipe.salt < 1.5) w.push(txt.saltLow); if (this.recipe.salt > 3.0) w.push(txt.saltHigh);
+                if (this.recipe.inoculation > 30) w.push(txt.startHigh); if (this.recipe.inoculation < 10) w.push(txt.startLow);
+                if (this.recipe.hydration > 85) w.push(txt.hydraHigh);
+                const totalAddins = this.recipe.addins.reduce((s,a) => s + a.percentage, 0);
+                if (totalAddins > 30) w.push(txt.addinHigh);
+                return w;
+            },
+            calculated() {
+                // PHASE 3 LOGIC: REVERSE CALCULATION
+                const addinsSum = this.recipe.addins.reduce((sum, a) => sum + a.percentage, 0);
+                // Total Bakers % (Flour = 100)
+                const totalPct = 100 + this.recipe.hydration + this.recipe.salt + this.recipe.inoculation + addinsSum;
+                
+                let flourBase;
+
+                if (this.recipe.mode === 'target') {
+                    // Standard: Total Weight -> Flour Base
+                    flourBase = this.recipe.targetWeight / (totalPct / 100);
+                } else {
+                    // Limit Mode: Ingredient Weight -> Flour Base
+                    const limitAmount = this.recipe.limitWeight;
+                    const type = this.recipe.limitType;
+
+                    if (type === 'total_flour') {
+                        flourBase = limitAmount;
+                    } else if (type === 'water') {
+                        // Water = Flour * (Hydration/100)  => Flour = Water / (Hydration/100)
+                        flourBase = limitAmount / (this.recipe.hydration / 100);
+                    } else if (type === 'starter') {
+                        flourBase = limitAmount / (this.recipe.inoculation / 100);
+                    } else if (typeof type === 'number') {
+                        // Specific Flour Index
+                        const fPct = this.recipe.flours[type].percentage;
+                        flourBase = limitAmount / (fPct / 100);
+                    }
+                    
+                    // Safety for divide by zero
+                    if(!isFinite(flourBase)) flourBase = 0;
+                }
+
+                const floursCalculated = this.recipe.flours.map(f => ({ ...f, weight: Math.round(flourBase * (f.percentage / 100)) }));
+                const addinsCalculated = this.recipe.addins.map(a => ({ ...a, weight: Math.round(flourBase * (a.percentage / 100)) }));
+                
+                const w = Math.round(flourBase * (this.recipe.hydration / 100));
+                const s = Math.round(flourBase * (this.recipe.inoculation / 100));
+                const sa = Math.round(flourBase * (this.recipe.salt / 100));
+                
+                // Recalculate total weight for display
+                const totalW = floursCalculated.reduce((a,b)=>a+b.weight,0) + addinsCalculated.reduce((a,b)=>a+b.weight,0) + w + s + sa;
+
+                return {
+                    flours: floursCalculated,
+                    addins: addinsCalculated,
+                    water: w,
+                    starter: s,
+                    salt: sa,
+                    totalWeight: totalW
+                }
+            },
+            nutrients() {
+                let totalKcal = 0;
+                let totalCarb = 0;
+                this.calculated.flours.forEach(f => { totalKcal += f.weight * 3.6; totalCarb += f.weight * 0.72; });
+                totalKcal += this.calculated.starter * 1.8; totalCarb += this.calculated.starter * 0.36;
+                this.calculated.addins.forEach(a => { totalKcal += a.weight * 5; totalCarb += a.weight * 0.2; });
+                const totalWt = this.calculated.totalWeight;
+                return {
+                    totalKcal: Math.round(totalKcal),
+                    kcalPer100: Math.round((totalKcal / totalWt) * 100),
+                    carbPer100: Math.round((totalCarb / totalWt) * 100)
+                };
+            },
+            groupedTimeline() {
+                if (!this.scheduler.bakeTime) return {};
+                const bakeDate = new Date(this.scheduler.bakeTime);
+                const retardH = this.scheduler.retardHours;
+                const bulkH = this.scheduler.bulkHours;
+                const txt = messages[this.lang].steps;
+                const tToday = messages[this.lang].today;
+                const tTmr = messages[this.lang].tomorrow;
+
+                let steps = [
+                    { action: txt.bake, desc: txt.score, offset: 0, dotColor: 'border-red-500', duration: `${this.costs.bakeTimeMinutes}m` },
+                    { action: txt.preheat, desc: txt.ovenSet, offset: 1, dotColor: 'border-red-300', duration: '1h' },
+                    { action: txt.retard, desc: `${txt.fridge} ${retardH}h`, offset: retardH, dotColor: 'border-blue-500', duration: `${retardH}h` },
+                    { action: txt.shape, desc: txt.finalShape, offset: retardH + 0.5, dotColor: 'border-amber-500', duration: '30m' },
+                    { action: txt.bulk, desc: txt.folds, offset: retardH + 0.5 + bulkH, dotColor: 'border-amber-300', duration: `${bulkH}h` },
+                    { action: txt.mix, desc: txt.mixDesc, offset: retardH + 0.5 + bulkH + 0.5, dotColor: 'border-stone-500', duration: '30m' },
+                    { action: txt.feed, desc: txt.feedDesc, offset: retardH + 0.5 + bulkH + 4.5, dotColor: 'border-green-500', duration: '4h' }
+                ];
+                if (this.recipe.addins.length > 0) steps.push({ action: txt.addins, desc: txt.lamination, offset: retardH + 0.5 + bulkH - 1, dotColor: 'border-purple-400', duration: '15m' });
+
+                const groups = {};
+                steps.map(s => {
+                    const timeObj = new Date(bakeDate.getTime() - (s.offset * 60 * 60 * 1000));
+                    return { ...s, rawTime: timeObj, timeDisplay: timeObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+                }).sort((a,b) => a.rawTime - b.rawTime).forEach(item => {
+                    const d = item.rawTime; const now = new Date(); const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate()+1);
+                    let key = d.toLocaleDateString(this.lang, { weekday:'short', day:'numeric', month:'short' });
+                    if(d.toDateString() === now.toDateString()) key = `${tToday} (${key})`;
+                    else if(d.toDateString() === tomorrow.toDateString()) key = `${tTmr} (${key})`;
+                    if (!groups[key]) groups[key] = []; groups[key].push(item);
+                });
+                return groups;
+            },
+            energyCost() {
+                const h = this.costs.bakeTimeMinutes / 60;
+                if(this.costs.energyType === 'electric') return (this.costs.electric.watts/1000)*h*this.costs.electric.rate;
+                if(this.costs.energyType === 'gas') return (this.costs.gas.tankPrice/(this.costs.gas.tankWeight*1000))*this.costs.gas.consumption*h;
+                return this.costs.wood.costPerUnit*this.costs.wood.usagePerHour*h;
+            },
+            grandTotalCost() {
+                const f = this.recipe.flours.reduce((s,f,i)=>s+(((this.calculated.flours[i]?.weight||0)/1000)*(f.costPerKg||0)),0);
+                const a = this.recipe.addins.reduce((s,a,i)=>s+(((this.calculated.addins[i]?.weight||0)/1000)*(a.costPerKg||0)),0);
+                return f + a + ((this.calculated.starter/1000)*2) + 0.05 + this.energyCost + (this.costs.laborRate*this.costs.laborHours);
+            },
+            profit() { return this.costs.sellingPrice - this.grandTotalCost; },
+            profitMargin() { return this.costs.sellingPrice <= 0 ? 0 : Math.round((this.profit/this.costs.sellingPrice)*100); }
+        },
+        methods: {
+            t(key) { 
+                if(key.includes('.')) { const [k1, k2] = key.split('.'); return messages[this.lang][k1][k2]; }
+                return messages[this.lang][key] || key; 
+            },
+            toggleLang() {
+                const langs = ['en', 'de', 'fr', 'nl', 'es', 'it', 'zh', 'ja', 'ko', 'th'];
+                const oldLang = this.lang;
+                let idx = langs.indexOf(this.lang);
+                this.lang = langs[(idx + 1) % langs.length];
+                const oldDefs = messages[oldLang].defaults;
+                const newDefs = messages[this.lang].defaults;
+                this.recipe.flours.forEach(f => {
+                    if(f.name === oldDefs.bread) f.name = newDefs.bread;
+                    else if(f.name === oldDefs.whole) f.name = newDefs.whole;
+                    else if(f.name === oldDefs.rye) f.name = newDefs.rye;
+                });
+                this.saveToLocalStorage();
+            },
+            balanceFlours(i) { if(i>0) { const sec = this.recipe.flours.slice(1).reduce((s,f)=>s+f.percentage,0); this.recipe.flours[0].percentage = Math.max(0, 100-sec); }},
+            addFlour() { this.recipe.flours.push({name: messages[this.lang].defaults.bread, percentage:0, costPerKg:0}); },
+            removeFlour(i) { this.recipe.flours.splice(i,1); this.balanceFlours(1); },
+            addAddin() { this.recipe.addins.push({name:'', percentage:10, costPerKg:0}); },
+            removeAddin(i) { this.recipe.addins.splice(i,1); },
+            formatMoney(val) { return new Intl.NumberFormat(this.lang, { style: 'currency', currency: this.currencyCode }).format(val); },
+            setDefaultBakeTime() { const t = new Date(); t.setDate(t.getDate()+1); t.setHours(8,0,0,0); this.scheduler.bakeTime = (new Date(t-(t.getTimezoneOffset()*60000))).toISOString().slice(0,16); },
+            saveToLocalStorage() { 
+                const data = { recipe: this.recipe, costs: this.costs, scheduler: this.scheduler, savedRecipes: this.savedRecipes, lang: this.lang }; 
+                localStorage.setItem('sourdough_app_v14', JSON.stringify(data)); 
+            },
+            loadFromLocalStorage() {
+                const raw = localStorage.getItem('sourdough_app_v14');
+                if(raw) { const d = JSON.parse(raw); if(d.recipe) this.recipe = d.recipe; if(d.costs) this.costs = d.costs; if(d.scheduler) this.scheduler = d.scheduler; if(d.savedRecipes) this.savedRecipes = d.savedRecipes; if(d.lang) this.lang = d.lang; }
+            },
+            saveRecipeToLibrary() { 
+                if(!this.recipeNameInput) return; 
+                this.savedRecipes.push({ name: this.recipeNameInput, date: new Date().toLocaleDateString(), recipe: JSON.parse(JSON.stringify(this.recipe)), costs: JSON.parse(JSON.stringify(this.costs)), scheduler: JSON.parse(JSON.stringify(this.scheduler)) });
+                this.recipeNameInput = ''; this.saveToLocalStorage(); this.showMenu = false;
+            },
+            loadRecipe(i) { const r = this.savedRecipes[i]; this.recipe = JSON.parse(JSON.stringify(r.recipe)); this.costs = JSON.parse(JSON.stringify(r.costs)); this.scheduler = JSON.parse(JSON.stringify(r.scheduler)); this.showMenu = false; },
+            deleteRecipe(i) { if(confirm('Delete?')) { this.savedRecipes.splice(i,1); this.saveToLocalStorage(); } }
+        },
+        mounted() { this.loadFromLocalStorage(); if(!this.scheduler.bakeTime) this.setDefaultBakeTime(); this.$watch(() => [this.recipe, this.costs, this.scheduler], () => { this.saveToLocalStorage(); }, { deep: true }); }
+    }).mount('#app')
+</script>
+</body>
+</html>
